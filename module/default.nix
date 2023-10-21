@@ -146,11 +146,11 @@ let
       ${jq} \
         --null-input \
         --compact-output \
-        --argfile old "$oldGenFile" \
+        --slurpfile old "$oldGenFile" \
         ${
           if isActivation then
             ''
-              --argfile new "$newGenFile" \
+              --slurpfile new "$newGenFile" \
               '$old - $new | .[]' |
             ''
           else
