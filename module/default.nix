@@ -10,6 +10,7 @@ let
   cfg = config.homeage;
 
   inherit (lib)
+    concatStringsSep
     hm
     makeBinPath
     mapAttrsToList
@@ -28,11 +29,11 @@ let
 
   jq = lib.getExe pkgs.jq;
 
-  identities = builtins.concatStringsSep " " (map (path: "-i ${path}") cfg.identityPaths);
+  identities = concatStringsSep " " (map (path: "-i ${path}") cfg.identityPaths);
 
   createFiles =
     command: runtimepath: destinations:
-    builtins.concatStringsSep "\n" (
+    concatStringsSep "\n" (
       (map (dest: ''
         $DRY_RUN_CMD mkdir $VERBOSE_ARG -p $(dirname ${dest})
         $DRY_RUN_CMD ${command} $VERBOSE_ARG ${runtimepath} ${dest}
@@ -59,7 +60,8 @@ let
       copiesCmds = createFiles "cp -f" path copies;
     in
     ''
-      echo "Decrypting secret ${source} to ${path}"
+      echo "Decrypting secret ${source} to ${path} using identities ${concatStringsSep ", " config.homeage.identityPaths}..."
+      echo ""
       TMP_FILE="${path}.tmp"
       $DRY_RUN_CMD mkdir $VERBOSE_ARG -p $(dirname ${path})
       (
@@ -299,16 +301,14 @@ in
       home.activation.homeageDecryptCheck =
         let
           decryptCheckScript = name: source: ''
-            if ! ${ageBin} -d ${identities} -o /dev/null ${source} 2>/dev/null ; then
+            if ! ${ageBin} -d ${identities} -o /dev/null ${source}; then
               DECRYPTION="''${DECRYPTION}[homeage] Failed to decrypt ${name}\n"
             fi
           '';
 
           checkDecryptionScript = ''
             DECRYPTION=
-            ${builtins.concatStringsSep "\n" (
-              lib.mapAttrsToList (n: v: decryptCheckScript n v.source) cfg.file
-            )}
+            ${concatStringsSep "\n" (mapAttrsToList (n: v: decryptCheckScript n v.source) cfg.file)}
             if [ -n "$DECRYPTION" ]; then
               printf "''${errorColor}''${DECRYPTION}[homeage] Check homeage.identityPaths to either add an identity or remove a broken one\n''${normalColor}" 1>&2
               exit 1
@@ -343,9 +343,7 @@ in
 
           homeageDecrypt =
             let
-              activationScript = builtins.concatStringsSep "\n" (
-                lib.attrsets.mapAttrsToList decryptSecret cfg.file
-              );
+              activationScript = concatStringsSep "\n" (mapAttrsToList decryptSecret cfg.file);
             in
             hm.dag.entryBetween [ "reloadSystemd" ] [ "writeBoundary" ] activationScript;
         };
@@ -389,8 +387,8 @@ in
                   set -euo pipefail
 
                   path="${value.path}"
-                  symlinks=(${builtins.concatStringsSep " " value.symlinks})
-                  copies=(${builtins.concatStringsSep " " value.copies})
+                  symlinks=(${concatStringsSep " " value.symlinks})
+                  copies=(${concatStringsSep " " value.copies})
 
                   ${cleanupSecret ""}
                 ''}";
